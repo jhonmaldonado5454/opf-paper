@@ -1,4 +1,4 @@
-# Synthetic Load Data Generator
+# Synthetic Load Data Generator - Final Version
 # Generates realistic hourly load data for forecasting research
 # Based on Prof. Gonzalo's requirements
 

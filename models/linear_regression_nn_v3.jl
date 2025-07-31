@@ -1,5 +1,5 @@
-# Load Forecasting Models Comparison
-# Compares 15-day vs 24-hour forecasting models
+# Load Forecasting Models Comparison - Final Version
+# Compares 15-day vs 24-hour forecasting models with temporal analysis
 # Based on Prof. Gonzalo's requirements
 
 using CSV, DataFrames
@@ -256,11 +256,131 @@ function compare_models(df_test, pred_24h, pred_15d, features)
 end
 
 """
+Creates temporal analysis visualizations showing model performance across different time horizons
+"""
+function create_temporal_analysis(df_test, pred_24h, pred_15d, 
+                                results_dir = raw"C:\Users\jhonm\Visual SC Projects\opf-paper\results")
+    println("\n=== Creating Temporal Analysis Visualizations ===")
+    
+    # Ensure all arrays have the same length
+    min_length = min(length(df_test.load_24h), length(pred_24h), length(pred_15d))
+    actual = df_test.load_24h[1:min_length]
+    pred_24h_viz = pred_24h[1:min_length]
+    pred_15d_viz = pred_15d[1:min_length]
+    timestamps = df_test.timestamp[1:min_length]
+    
+    # Define time periods
+    hours_1_day = 24
+    hours_1_week = 168    # 7 days * 24 hours
+    hours_15_days = 360   # 15 days * 24 hours
+    
+    # Ensure we have enough data for each period
+    max_hours = min(hours_15_days, min_length)
+    
+    # 1. ONE DAY ANALYSIS (First 24 hours)
+    day_range = 1:min(hours_1_day, max_hours)
+    
+    p1 = plot(timestamps[day_range], actual[day_range],
+        lw=4, color=:black, label="Actual Load",
+        title="24-Hour Period Analysis")
+    plot!(p1, timestamps[day_range], pred_24h_viz[day_range],
+        lw=3, color=:red, label="24-hour Model", alpha=0.8)
+    plot!(p1, timestamps[day_range], pred_15d_viz[day_range],
+        lw=3, color=:blue, label="15-day Model", alpha=0.8, ls=:dash)
+    
+    xlabel!(p1, "Time")
+    ylabel!(p1, "Load (MW)")
+    
+    # Calculate daily metrics
+    daily_rmse_24h = sqrt(mean((pred_24h_viz[day_range] .- actual[day_range]).^2))
+    daily_rmse_15d = sqrt(mean((pred_15d_viz[day_range] .- actual[day_range]).^2))
+    
+    # 2. ONE WEEK ANALYSIS (First 168 hours)
+    week_range = 1:min(hours_1_week, max_hours)
+    
+    p2 = plot(timestamps[week_range], actual[week_range],
+        lw=2, color=:black, label="Actual Load",
+        title="Weekly Period Analysis (7 Days)")
+    plot!(p2, timestamps[week_range], pred_24h_viz[week_range],
+        lw=2, color=:red, label="24-hour Model", alpha=0.8)
+    plot!(p2, timestamps[week_range], pred_15d_viz[week_range],
+        lw=2, color=:blue, label="15-day Model", alpha=0.8, ls=:dash)
+    
+    xlabel!(p2, "Date")
+    ylabel!(p2, "Load (MW)")
+    
+    # Calculate weekly metrics
+    weekly_rmse_24h = sqrt(mean((pred_24h_viz[week_range] .- actual[week_range]).^2))
+    weekly_rmse_15d = sqrt(mean((pred_15d_viz[week_range] .- actual[week_range]).^2))
+    
+    # 3. FIFTEEN DAYS ANALYSIS (First 360 hours)
+    days15_range = 1:min(hours_15_days, max_hours)
+    
+    p3 = plot(timestamps[days15_range], actual[days15_range],
+        lw=1.5, color=:black, label="Actual Load",
+        title="15-Day Period Analysis")
+    plot!(p3, timestamps[days15_range], pred_24h_viz[days15_range],
+        lw=1.5, color=:red, label="24-hour Model", alpha=0.8)
+    plot!(p3, timestamps[days15_range], pred_15d_viz[days15_range],
+        lw=1.5, color=:blue, label="15-day Model", alpha=0.8, ls=:dash)
+    
+    xlabel!(p3, "Date")
+    ylabel!(p3, "Load (MW)")
+    
+    # Calculate 15-day metrics
+    days15_rmse_24h = sqrt(mean((pred_24h_viz[days15_range] .- actual[days15_range]).^2))
+    days15_rmse_15d = sqrt(mean((pred_15d_viz[days15_range] .- actual[days15_range]).^2))
+    
+    # 4. SIMPLE BAR CHART FOR PERFORMANCE COMPARISON
+    time_periods = ["1 Day", "1 Week", "15 Days"]
+    rmse_24h_values = [daily_rmse_24h, weekly_rmse_24h, days15_rmse_24h]
+    rmse_15d_values = [daily_rmse_15d, weekly_rmse_15d, days15_rmse_15d]
+    
+    # Create simple bar chart
+    x_positions = [1, 2, 3]
+    bar_width = 0.35
+    
+    p4 = bar(x_positions .- bar_width/2, rmse_24h_values, 
+        bar_width=bar_width, color=:red, alpha=0.8, label="24-hour Model",
+        title="RMSE Performance Across Time Horizons")
+    bar!(p4, x_positions .+ bar_width/2, rmse_15d_values, 
+        bar_width=bar_width, color=:blue, alpha=0.8, label="15-day Model")
+    
+    xlabel!(p4, "Time Period")
+    ylabel!(p4, "RMSE (MW)")
+    xticks!(p4, x_positions, time_periods)
+    
+    # Combine all plots
+    combined_plot = plot(p1, p2, p3, p4, layout=(2,2), size=(1600, 1200),
+        plot_title="Temporal Analysis: Model Performance Across Different Time Horizons")
+    
+    # Save visualization
+    output_file = joinpath(results_dir, "temporal_analysis_v3.png")
+    savefig(combined_plot, output_file)
+    println("Temporal analysis saved to: $output_file")
+    
+    display(combined_plot)
+    
+    # Create performance summary table
+    performance_summary = DataFrame(
+        Time_Period = time_periods,
+        RMSE_24h = rmse_24h_values,
+        RMSE_15d = rmse_15d_values,
+        Improvement_Percent = [(rmse_15d_values[i] - rmse_24h_values[i]) / rmse_15d_values[i] * 100 for i in 1:3]
+    )
+    
+    println("\n=== Temporal Performance Summary ===")
+    println(performance_summary)
+    
+    return combined_plot, performance_summary
+end
+
+"""
 Creates comprehensive visualizations for model analysis
 """
 function create_model_visualizations(df_test, pred_24h, pred_15d, 
                                    results_dir = raw"C:\Users\jhonm\Visual SC Projects\opf-paper\results")
-    println("\n=== Creating Visualizations ===")
+    println("\n=== Creating Standard Model Comparison Visualizations ===")
     
     # Ensure all arrays have the same length
     min_length = min(length(df_test.load_24h), length(pred_24h), length(pred_15d))
@@ -324,7 +444,7 @@ function create_model_visualizations(df_test, pred_24h, pred_15d,
     # Save visualization
     output_file = joinpath(results_dir, "model_comparison_analysis_v3.png")
     savefig(combined_plot, output_file)
-    println("Visualization saved to: $output_file")
+    println("Standard visualization saved to: $output_file")
     
     display(combined_plot)
     
@@ -381,28 +501,35 @@ function main()
     pred_15d_24h = vec(model_15d(X_test_15d_norm'))  # Note the transpose here
     comparison_results = compare_models(df_test, pred_24h, pred_15d_24h, features)
     
-    # 8. Create visualizations
+    # 8. Create temporal analysis visualizations
+    temporal_plot, temporal_summary = create_temporal_analysis(df_test, pred_24h, pred_15d_24h)
+    
+    # 9. Create original comparison visualization
     viz_plot = create_model_visualizations(df_test, pred_24h, pred_15d_24h)
     
-    # 9. Save results
+    # 10. Save results
     data_dir = raw"C:\Users\jhonm\Visual SC Projects\opf-paper\data"
     CSV.write(joinpath(data_dir, "model_comparison_results_v3.csv"), comparison_results)
     CSV.write(joinpath(data_dir, "results_24h_model_v3.csv"), results_24h)
     CSV.write(joinpath(data_dir, "results_15d_model_v3.csv"), results_15d)
+    CSV.write(joinpath(data_dir, "temporal_performance_summary_v3.csv"), temporal_summary)
     
-    # 10. Performance summary
+    # 11. Performance summary
     println("\n=== Final Summary ===")
     println("Analysis complete! Files saved:")
     println("- model_comparison_results_v3.csv")
     println("- results_24h_model_v3.csv") 
     println("- results_15d_model_v3.csv")
+    println("- temporal_performance_summary_v3.csv")
     println("- model_comparison_analysis_v3.png")
+    println("- temporal_analysis_v3.png")
     
     return Dict(
         "models" => (model_24h, model_15d),
         "predictions" => (pred_24h, pred_15d_24h),
         "results" => (results_24h, results_15d),
         "comparison" => comparison_results,
+        "temporal_summary" => temporal_summary,
         "data" => (df_train, df_val, df_test)
     )
 end

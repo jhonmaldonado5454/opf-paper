@@ -1,6 +1,6 @@
 # Synthetic Load Data Generator V4 - FINAL WORKING VERSION
 # Generates realistic hourly load data for comprehensive forecasting research
-# Author: Advanced Load Forecasting System V4 - Final
+# Author: Jhon Maldonado
 
 using CSV, DataFrames
 using Statistics
